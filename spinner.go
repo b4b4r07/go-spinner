@@ -41,12 +41,10 @@ type ProgressFunc func(title string)
 type Screen struct {
 	Spinners []*Spinner
 
-	screenLines             int
-	startingLine            int
-	totalNewlines           int
-	historicNewlinesCounter int
+	screenLines   int
+	startingLine  int
+	totalNewlines int
 
-	history map[int]string
 	sync.Mutex
 }
 
@@ -54,9 +52,7 @@ func New() (*Screen, error) {
 	_, lines, _ := curse.GetScreenDimensions()
 	_, line, _ := curse.GetCursorPosition()
 
-	history := make(map[int]string)
-
-	b := &Screen{screenLines: lines, startingLine: line, history: history}
+	b := &Screen{screenLines: lines, startingLine: line}
 	return b, nil
 }
 
@@ -93,7 +89,6 @@ func (b *Screen) MakeBar() ProgressFunc {
 	bar.length = len(bar.frames)
 	b.Spinners = append(b.Spinners, bar)
 	bar.Line = b.startingLine + b.totalNewlines
-	b.history[bar.Line] = ""
 	// bar.Update("?")
 	b.Println()
 
@@ -118,7 +113,6 @@ func (p *Spinner) Update(title string) {
 
 func (b *Screen) addedNewlines(count int) {
 	b.totalNewlines += count
-	b.historicNewlinesCounter += count
 
 	if b.startingLine+b.totalNewlines > b.screenLines {
 		b.totalNewlines -= count
@@ -131,17 +125,6 @@ func (b *Screen) addedNewlines(count int) {
 
 func (b *Screen) redrawAll(moveUp int) {
 	c, _ := curse.New()
-
-	newHistory := make(map[int]string)
-	for line, printed := range b.history {
-		newHistory[line+moveUp] = printed
-		c.Move(1, line)
-		c.EraseCurrentLine()
-		c.Move(1, line+moveUp)
-		c.EraseCurrentLine()
-		fmt.Print(printed)
-	}
-	b.history = newHistory
 	c.Move(c.StartingPosition.X, c.StartingPosition.Y)
 }
 
@@ -150,8 +133,6 @@ func (b *Screen) Print(a ...interface{}) (n int, err error) {
 	defer b.Unlock()
 	newlines := countAllNewlines(a...)
 	b.addedNewlines(newlines)
-	thisLine := b.startingLine + b.totalNewlines
-	b.history[thisLine] = fmt.Sprint(a...)
 	return fmt.Print(a...)
 }
 
@@ -161,8 +142,6 @@ func (b *Screen) Printf(format string, a ...interface{}) (n int, err error) {
 	newlines := strings.Count(format, "\n")
 	newlines += countAllNewlines(a...)
 	b.addedNewlines(newlines)
-	thisLine := b.startingLine + b.totalNewlines
-	b.history[thisLine] = fmt.Sprintf(format, a...)
 	return fmt.Printf(format, a...)
 }
 
@@ -171,8 +150,6 @@ func (b *Screen) Println(a ...interface{}) (n int, err error) {
 	defer b.Unlock()
 	newlines := countAllNewlines(a...) + 1
 	b.addedNewlines(newlines)
-	thisLine := b.startingLine + b.totalNewlines
-	b.history[thisLine] = fmt.Sprint(a...)
 	return fmt.Println(a...)
 }
 
